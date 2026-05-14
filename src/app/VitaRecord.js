@@ -281,6 +281,7 @@ function HomeScreen({ state, setTela }) {
             ["🧪", "Novo Exame", "exames", C.teal],
             ["💊", "Nova Receita", "receitas", C.amber],
             ["💉", "Vacinas", "vacinas", C.violet],
+            ["📄", "Atestados", "atestados", C.violet],
             ["🤖", "IA Médica", "ia", C.tealDim],
           ].map(([icon, label, tela, color]) => (
             <button key={tela} onClick={() => setTela(tela)} style={{ background: `${color}11`, border: `1px solid ${color}33`, borderRadius: 10, padding: "14px 10px", cursor: "pointer", textAlign: "center" }}>
@@ -405,6 +406,114 @@ Formato exato:
     </div>
   );
 
+  const [editando, setEditando] = useState(null);
+  const [detalhe, setDetalhe] = useState(null);
+
+  function excluirExame(idx) {
+    if (!confirm("Excluir este exame? Esta ação não pode ser desfeita.")) return;
+    setState(s => ({ ...s, exames: s.exames.filter((_, i) => i !== idx) }));
+    setDetalhe(null);
+  }
+
+  function salvarEdicao() {
+    if (!editando) return;
+    setState(s => ({
+      ...s,
+      exames: s.exames.map((e, i) => i === editando.idx
+        ? { ...e, data: editando.data, tipo: editando.tipo, laboratorio: editando.laboratorio }
+        : e
+      )
+    }));
+    setEditando(null);
+  }
+
+  // TELA: EDITAR
+  if (editando) return (
+    <div style={S.content}>
+      <button style={{ ...S.btnGhost(), marginBottom: 12 }} onClick={() => setEditando(null)}>← Voltar</button>
+      <div style={S.card}>
+        <div style={S.cardTitle}>✏️ Editar exame</div>
+        {[
+          ["Tipo do exame", "tipo", "text", "Ex: Hemograma, Glicose..."],
+          ["Data do exame", "data", "text", "DD/MM/AAAA"],
+          ["Laboratório", "laboratorio", "text", "Nome do laboratório"],
+        ].map(([label, key, type, ph]) => (
+          <div key={key} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10, color: C.textDim, fontFamily: MONO, marginBottom: 4, letterSpacing: 1 }}>{label.toUpperCase()}</div>
+            <input style={S.input} type={type} placeholder={ph} value={editando[key] || ""} onChange={e => setEditando(ed => ({ ...ed, [key]: e.target.value }))} />
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...S.btn(), flex: 1 }} onClick={salvarEdicao}>✓ Salvar</button>
+          <button style={{ ...S.btnGhost(C.rose), flex: 1 }} onClick={() => { excluirExame(editando.idx); setEditando(null); }}>🗑 Excluir</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // TELA: DETALHE DO EXAME
+  if (detalhe !== null) {
+    const ex = state.exames[detalhe];
+    if (!ex) { setDetalhe(null); return null; }
+    return (
+      <div style={S.content}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+          <button style={S.btnGhost()} onClick={() => setDetalhe(null)}>← Voltar</button>
+          <button style={{ ...S.btnGhost(C.amber), fontSize: 10 }} onClick={() => { setEditando({ idx: detalhe, data: ex.data, tipo: ex.tipo, laboratorio: ex.laboratorio }); setDetalhe(null); }}>✏️ Editar</button>
+          <button style={{ ...S.btnGhost(C.rose), fontSize: 10 }} onClick={() => excluirExame(detalhe)}>🗑 Excluir</button>
+        </div>
+        <div style={S.card}>
+          <div style={{ fontSize: 16, fontWeight: "bold", color: C.white, marginBottom: 4 }}>{ex.tipo}</div>
+          <div style={{ fontSize: 11, color: C.textDim, fontFamily: MONO, marginBottom: 10 }}>{ex.laboratorio} · {ex.data}</div>
+          {ex.medico && <div style={{ fontSize: 11, color: C.textDim, marginBottom: 10 }}>Dr(a): {ex.medico}</div>}
+          {ex.resumo && (
+            <div style={{ background: C.tealGlow, border: `1px solid ${C.tealDim}44`, borderRadius: 8, padding: 10, fontSize: 13, color: C.text, lineHeight: 1.7, marginBottom: 10 }}>
+              {ex.resumo}
+            </div>
+          )}
+        </div>
+
+        {/* ALERTAS */}
+        {ex.alertas?.length > 0 && (
+          <div style={S.card}>
+            <div style={S.cardTitle}>⚠ Valores alterados</div>
+            {ex.alertas.map((a, i) => (
+              <div key={i} style={{ fontSize: 13, color: C.rose, padding: "5px 0", borderBottom: `1px solid ${C.border}` }}>• {a}</div>
+            ))}
+          </div>
+        )}
+
+        {/* RESULTADOS COMPLETOS */}
+        {ex.resultados?.length > 0 && (
+          <div style={S.card}>
+            <div style={S.cardTitle}>📊 Resultados completos</div>
+            {ex.resultados.map((r, i) => (
+              <div key={i} style={{ ...S.row, flexDirection: "column", alignItems: "flex-start" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                  <div style={{ fontSize: 13, color: r.status !== "normal" ? C.rose : C.text, fontWeight: r.status !== "normal" ? "bold" : "normal" }}>{r.nome}</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 13, fontFamily: MONO, color: r.status !== "normal" ? C.rose : C.teal }}>{r.valor} {r.unidade}</span>
+                    <span style={S.badge(r.status === "normal" ? C.teal : r.status === "critico" ? C.rose : C.amber)}>{r.status}</span>
+                  </div>
+                </div>
+                {r.referencia && <div style={{ fontSize: 10, color: C.textDim, fontFamily: MONO, marginTop: 2 }}>Ref: {r.referencia}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* RECOMENDAÇÃO */}
+        {ex.recomendacao && (
+          <div style={{ ...S.card, background: C.tealGlow, borderColor: C.tealDim + "44" }}>
+            <div style={S.cardTitle}>💡 Orientação</div>
+            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>{ex.recomendacao}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // TELA: LISTA
   return (
     <div style={S.content}>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -418,14 +527,21 @@ Formato exato:
           <div style={{ color: C.textDim, fontSize: 11, marginTop: 4 }}>Toque em + para adicionar</div>
         </div>
       ) : examesFiltrados.map((e, i) => (
-        <div key={i} style={S.card}>
+        <div key={i} style={{ ...S.card, cursor: "pointer" }} onClick={() => setDetalhe(state.exames.indexOf(e))}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
             <div style={{ fontSize: 14, fontWeight: "bold", color: C.white }}>{e.tipo}</div>
-            {e.alertas?.length > 0 && <span style={S.badge(C.rose)}>{e.alertas.length} alerta(s)</span>}
-            {(!e.alertas || e.alertas.length === 0) && <span style={S.badge(C.teal)}>normal</span>}
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {e.alertas?.length > 0 && <span style={S.badge(C.rose)}>{e.alertas.length} alerta(s)</span>}
+              {(!e.alertas || e.alertas.length === 0) && <span style={S.badge(C.teal)}>normal</span>}
+              <button onClick={ev => { ev.stopPropagation(); setEditando({ idx: state.exames.indexOf(e), data: e.data, tipo: e.tipo, laboratorio: e.laboratorio }); }}
+                style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: C.textMid, fontSize: 11 }}>✏️</button>
+              <button onClick={ev => { ev.stopPropagation(); excluirExame(state.exames.indexOf(e)); }}
+                style={{ background: "transparent", border: `1px solid ${C.rose}44`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: C.rose, fontSize: 11 }}>🗑</button>
+            </div>
           </div>
           <div style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>{e.laboratorio} · {e.data}</div>
-          {e.resumo && <div style={{ fontSize: 12, color: C.textMid, marginTop: 6, lineHeight: 1.5 }}>{e.resumo}</div>}
+          {e.resumo && <div style={{ fontSize: 12, color: C.textMid, marginTop: 6, lineHeight: 1.5 }}>{e.resumo?.substring(0, 80)}...</div>}
+          <div style={{ fontSize: 10, color: C.teal, fontFamily: MONO, marginTop: 6 }}>Toque para ver resultados completos →</div>
         </div>
       ))}
     </div>
@@ -936,6 +1052,131 @@ function PerfilScreen({ state, setState }) {
   );
 }
 
+
+// ─── ATESTADOS ────────────────────────────────────────────────────
+function AtestadosScreen({ state, setState }) {
+  const [loading, setLoading] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [modo, setModo] = useState("lista");
+
+  async function analisarAtestado(file) {
+    setLoading(true);
+    setResultado(null);
+    try {
+      const system = `Você é um especialista em documentos médicos brasileiro. Analise este atestado médico e retorne APENAS JSON puro sem markdown:
+{"medico":"nome","crm":"crm","especialidade":"especialidade","clinica":"clínica","paciente":"nome do paciente","data":"DD/MM/AAAA","diasAfastamento":"número ou vazio","dataInicio":"DD/MM/AAAA","dataFim":"DD/MM/AAAA","cid":"CID se informado","descricao":"descrição do afastamento","restricoes":"restrições se houver","observacoes":"observações"}`;
+      let texto;
+      if (file.type.startsWith("image/")) {
+        const b64 = await toBase64Image(file);
+        texto = await callAIWithImage(system, "Analise este atestado médico.", b64, "image/jpeg");
+      } else if (file.type === "application/pdf") {
+        const b64 = await toBase64(file);
+        texto = await callAIWithPDF(system, b64);
+      } else {
+        throw new Error("Formato não suportado");
+      }
+      setResultado(parseAIJson(texto));
+    } catch(e) {
+      setResultado({ erro: true, mensagem: e.message });
+    }
+    setLoading(false);
+  }
+
+  function salvar() {
+    if (!resultado || resultado.erro) return;
+    setState(s => ({ ...s, atestados: [{ ...resultado, id: Date.now() }, ...(s.atestados || [])] }));
+    setResultado(null);
+    setModo("lista");
+  }
+
+  function excluir(idx) {
+    if (!confirm("Excluir este atestado?")) return;
+    setState(s => ({ ...s, atestados: (s.atestados || []).filter((_, i) => i !== idx) }));
+  }
+
+  const atestados = state.atestados || [];
+
+  if (modo === "novo") return (
+    <div style={S.content}>
+      <button style={{ ...S.btnGhost(), marginBottom: 12 }} onClick={() => { setModo("lista"); setResultado(null); }}>← Voltar</button>
+      <div style={S.card}>
+        <div style={S.cardTitle}>📄 Enviar atestado médico</div>
+        <UploadZone onFile={analisarAtestado} accept="image/*,.pdf" label="Foto ou PDF do atestado" sublabel="A IA extrai todos os dados automaticamente" />
+      </div>
+      {loading && <LoadingDots label="Lendo atestado com IA..." />}
+      {resultado && !resultado.erro && (
+        <div style={S.card}>
+          <div style={S.cardTitle}>✓ Atestado identificado</div>
+          {[
+            ["Médico", resultado.medico],
+            ["CRM", resultado.crm],
+            ["Especialidade", resultado.especialidade],
+            ["Clínica", resultado.clinica],
+            ["Paciente", resultado.paciente],
+            ["Data", resultado.data],
+            ["Dias de afastamento", resultado.diasAfastamento],
+            ["Início", resultado.dataInicio],
+            ["Fim", resultado.dataFim],
+            ["CID", resultado.cid],
+          ].filter(([,v]) => v).map(([k, v]) => (
+            <div key={k} style={S.row}>
+              <span style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>{k}</span>
+              <span style={{ fontSize: 13, color: C.text }}>{v}</span>
+            </div>
+          ))}
+          {resultado.descricao && (
+            <div style={{ background: C.violetGlow, border: `1px solid ${C.violet}33`, borderRadius: 8, padding: 10, marginTop: 10, fontSize: 13, color: C.text, lineHeight: 1.6 }}>
+              {resultado.descricao}
+            </div>
+          )}
+          {resultado.restricoes && (
+            <div style={{ background: C.amberGlow, border: `1px solid ${C.amber}33`, borderRadius: 8, padding: 10, marginTop: 8, fontSize: 12, color: C.text }}>
+              ⚠️ Restrições: {resultado.restricoes}
+            </div>
+          )}
+          <button style={{ ...S.btn(C.violet), marginTop: 12, width: "100%", color: C.bg }} onClick={salvar}>Salvar atestado</button>
+        </div>
+      )}
+      {resultado?.erro && (
+        <div style={{ ...S.card, borderColor: C.rose + "44" }}>
+          <div style={{ color: C.rose }}>{resultado.mensagem}</div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={S.content}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, alignItems: "center" }}>
+        <div style={{ fontSize: 13, color: C.textMid }}>{atestados.length} atestado(s)</div>
+        <button style={S.btn(C.violet)} onClick={() => setModo("novo")}>+ Novo</button>
+      </div>
+      {atestados.length === 0 ? (
+        <div style={{ ...S.card, textAlign: "center", padding: 30 }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
+          <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum atestado cadastrado</div>
+        </div>
+      ) : atestados.map((a, i) => (
+        <div key={i} style={S.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: "bold", color: C.white }}>{a.medico || "Atestado"}</div>
+              <div style={{ fontSize: 11, color: C.textDim, fontFamily: MONO }}>{a.especialidade} · {a.data}</div>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {a.diasAfastamento && <span style={S.badge(C.violet)}>{a.diasAfastamento}d</span>}
+              <button onClick={() => excluir(i)} style={{ background: "transparent", border: `1px solid ${C.rose}44`, borderRadius: 6, padding: "3px 8px", cursor: "pointer", color: C.rose, fontSize: 11 }}>🗑</button>
+            </div>
+          </div>
+          {a.cid && <div style={{ fontSize: 11, color: C.textDim }}>CID: {a.cid}</div>}
+          {a.dataInicio && <div style={{ fontSize: 11, color: C.amber, fontFamily: MONO }}>Afastamento: {a.dataInicio} → {a.dataFim}</div>}
+          {a.descricao && <div style={{ fontSize: 12, color: C.textMid, marginTop: 6, lineHeight: 1.5 }}>{a.descricao?.substring(0, 100)}...</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // APP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════
@@ -945,6 +1186,7 @@ const INITIAL_STATE = {
   receitas: [],
   pedidos: [],
   vacinas: [],
+  atestados: [],
 };
 
 const STORAGE_KEY = "vitarecord_data_v1";
@@ -999,6 +1241,7 @@ export default function VitaRecord() {
     exames: { label: "Exames", icon: "🧪" },
     receitas: { label: "Receitas", icon: "💊" },
     vacinas: { label: "Vacinas", icon: "💉" },
+    atestados: { label: "Atestados", icon: "📄" },
     ia: { label: "IA", icon: "◉" },
   };
 
@@ -1008,6 +1251,7 @@ export default function VitaRecord() {
     receitas: "Receitas Médicas",
     pedidos: "Pedidos de Exame",
     vacinas: "Carteira Vacinal",
+    atestados: "Atestados Médicos",
     ia: "Assistente IA",
     perfil: "Meu Perfil",
   };
