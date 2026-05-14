@@ -361,6 +361,9 @@ Formato exato:
     busca === "" || JSON.stringify(e).toLowerCase().includes(busca.toLowerCase())
   );
 
+  const [editando, setEditando] = useState(null);
+  const [detalhe, setDetalhe] = useState(null);
+
   if (modo === "novo") return (
     <div style={S.content}>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -405,9 +408,6 @@ Formato exato:
       {resultado?.erro && <div style={{ ...S.card, borderColor: C.rose + "44" }}><div style={{ color: C.rose }}>{resultado.mensagem}</div></div>}
     </div>
   );
-
-  const [editando, setEditando] = useState(null);
-  const [detalhe, setDetalhe] = useState(null);
 
   function excluirExame(idx) {
     if (!confirm("Excluir este exame? Esta ação não pode ser desfeita.")) return;
