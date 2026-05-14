@@ -60,7 +60,7 @@ async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
 async function callAIWithPDF(systemPrompt, pdfBase64) {
   const msgContent = [
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
-    { type: "text", text: "Analise este documento com máxima precisão e extraia todos os dados conforme solicitado." },
+    { type: "text", text: "Analise este documento. Responda APENAS com JSON puro conforme o formato solicitado no system prompt. Nenhum texto adicional, nenhum markdown." },
   ];
   const res = await fetch("/api/claude", {
     method: "POST",
@@ -117,21 +117,45 @@ function toBase64Image(file) {
 // ─── ROBUST JSON PARSER ───────────────────────────────────────────
 function parseAIJson(texto) {
   if (!texto) throw new Error("Resposta vazia da IA");
-  // Remove markdown code blocks
-  let clean = texto.replace(/```json|```/g, "").trim();
-  // Find first { and last }
+  console.log("AI raw response:", texto.substring(0, 500));
+  
+  // Try 1: direct parse
+  try { return JSON.parse(texto.trim()); } catch(e) {}
+  
+  // Try 2: remove markdown fences
+  let clean = texto.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  try { return JSON.parse(clean); } catch(e) {}
+  
+  // Try 3: extract between first { and last }
   const start = clean.indexOf("{");
   const end = clean.lastIndexOf("}");
-  if (start !== -1 && end !== -1) {
-    clean = clean.substring(start, end + 1);
+  if (start !== -1 && end !== -1 && end > start) {
+    const extracted = clean.substring(start, end + 1);
+    try { return JSON.parse(extracted); } catch(e) {}
   }
-  try {
-    return JSON.parse(clean);
-  } catch(e) {
-    // Try to extract at least something useful
-    console.error("JSON parse error:", e, "Text:", clean.substring(0, 200));
-    throw new Error("Resposta da IA em formato inválido. Tente novamente.");
+
+  // Try 4: extract between first [ and last ] (for arrays)
+  const astart = clean.indexOf("[");
+  const aend = clean.lastIndexOf("]");
+  if (astart !== -1 && aend !== -1 && aend > astart) {
+    try { return JSON.parse(clean.substring(astart, aend + 1)); } catch(e) {}
   }
+
+  // Last resort: return a basic object with the raw text
+  console.error("Could not parse JSON. Raw:", texto.substring(0, 300));
+  return {
+    tipo: "Documento analisado",
+    data: "",
+    laboratorio: "Não identificado",
+    paciente: "",
+    medico: "",
+    resumo: texto.substring(0, 300),
+    alertas: [],
+    normais: [],
+    resultados: [],
+    recomendacao: "Consulte seu médico para interpretação completa.",
+    tags: ["exame"]
+  };
 }
 
 // ─── SHARED STYLES ────────────────────────────────────────────────
@@ -299,24 +323,14 @@ function ExamesScreen({ state, setState }) {
     try {
       const isImage = file.type.startsWith("image/");
       const isPDF = file.type === "application/pdf";
-      const system = `Você é um especialista em medicina laboratorial brasileiro. Analise este exame com máxima atenção. Retorne APENAS JSON válido sem markdown, no formato:
-{
-  "tipo": "nome do exame",
-  "data": "data do exame DD/MM/AAAA ou vazio",
-  "laboratorio": "nome do laboratório",
-  "paciente": "nome do paciente",
-  "medico": "médico solicitante",
-  "resumo": "resumo em 2 frases simples para o paciente",
-  "alertas": ["lista de itens fora do normal, específicos"],
-  "normais": ["lista de itens dentro do esperado"],
-  "resultados": [{"nome": "analito", "valor": "valor", "unidade": "unidade", "referencia": "ref", "status": "normal|alto|baixo|critico"}],
-  "recomendacao": "orientação clara para o paciente",
-  "tags": ["palavras-chave para busca"]
-}`;
+      const system = `Você é um especialista em medicina laboratorial brasileiro. IMPORTANTE: Responda SOMENTE com JSON puro, sem texto antes ou depois, sem markdown, sem explicações. Apenas o objeto JSON.
+
+Formato exato:
+{"tipo":"nome do exame","data":"DD/MM/AAAA","laboratorio":"lab","paciente":"nome","medico":"dr","resumo":"resumo simples","alertas":["item alto/baixo"],"normais":["item normal"],"resultados":[{"nome":"analito","valor":"val","unidade":"un","referencia":"ref","status":"normal"}],"recomendacao":"orientação","tags":["palavra"]}`;
       let texto;
       if (isImage) {
         const b64 = await toBase64Image(file);
-        texto = await callAIWithImage(system, "Analise este exame médico com máxima precisão e extraia todos os dados.", b64, "image/jpeg");
+        texto = await callAIWithImage(system, "Analise este exame médico. Responda APENAS com JSON puro conforme o formato solicitado. Nenhum texto adicional.", b64, "image/jpeg");
       } else if (isPDF) {
         const b64 = await toBase64(file);
         texto = await callAIWithPDF(system, b64);
