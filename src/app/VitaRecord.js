@@ -86,6 +86,27 @@ function toBase64(file) {
   });
 }
 
+
+// ─── ROBUST JSON PARSER ───────────────────────────────────────────
+function parseAIJson(texto) {
+  if (!texto) throw new Error("Resposta vazia da IA");
+  // Remove markdown code blocks
+  let clean = texto.replace(/```json|```/g, "").trim();
+  // Find first { and last }
+  const start = clean.indexOf("{");
+  const end = clean.lastIndexOf("}");
+  if (start !== -1 && end !== -1) {
+    clean = clean.substring(start, end + 1);
+  }
+  try {
+    return JSON.parse(clean);
+  } catch(e) {
+    // Try to extract at least something useful
+    console.error("JSON parse error:", e, "Text:", clean.substring(0, 200));
+    throw new Error("Resposta da IA em formato inválido. Tente novamente.");
+  }
+}
+
 // ─── SHARED STYLES ────────────────────────────────────────────────
 const S = {
   page: { background: C.bg, minHeight: "100vh", fontFamily: FONT, color: C.text, maxWidth: 480, margin: "0 auto", position: "relative", paddingBottom: 72 },
@@ -274,8 +295,7 @@ function ExamesScreen({ state, setState }) {
       } else {
         texto = await callAI(system, `Arquivo: ${file.name}`);
       }
-      const clean = texto.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      const parsed = parseAIJson(texto);
       setResultado(parsed);
     } catch (e) {
       setResultado({ erro: true, mensagem: `Erro: ${e?.message || e}. Tente novamente.` });
@@ -407,8 +427,7 @@ function ReceitasScreen({ state, setState }) {
       } else {
         texto = await callAI(system, `Receita: ${file.name}`);
       }
-      const clean = texto.replace(/```json|```/g, "").trim();
-      setResultado(JSON.parse(clean));
+      setResultado(parseAIJson(texto));
     } catch {
       setResultado({ erro: true });
     }
@@ -541,7 +560,7 @@ function PedidosScreen({ state, setState }) {
       } else {
         texto = await callAI(system, `Pedido: ${file.name}`);
       }
-      setResultado(JSON.parse(texto.replace(/```json|```/g, "").trim()));
+      setResultado(parseAIJson(texto));
     } catch { setResultado({ erro: true }); }
     setLoading(false);
   }
@@ -673,7 +692,7 @@ function VacinasScreen({ state, setState }) {
 }`;
       const b64 = await toBase64(file);
       const texto = await callAIWithImage(system, "Analise esta carteirinha de vacinação com máxima atenção.", b64, "image/jpeg");
-      const parsed = JSON.parse(texto.replace(/```json|```/g, "").trim());
+      const parsed = parseAIJson(texto);
       if (parsed.vacinas) {
         setState(s => ({ ...s, vacinas: [...parsed.vacinas, ...s.vacinas] }));
         setIaAnalise(`✅ ${parsed.vacinas.length} vacina(s) importada(s). ${parsed.atrasadas?.length ? `⚠️ Possíveis atrasos: ${parsed.atrasadas.join(", ")}.` : ""} ${parsed.observacoes || ""}`);
