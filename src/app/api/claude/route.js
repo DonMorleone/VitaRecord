@@ -9,10 +9,7 @@ export async function POST(request) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ 
-        error: 'API key not configured',
-        detail: 'ANTHROPIC_API_KEY não configurada no Vercel'
-      }, { status: 500 });
+      return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
     }
 
     // Comprime imagens grandes antes de enviar
@@ -25,7 +22,6 @@ export async function POST(request) {
               if (block.source.data.length > maxLen) {
                 block.source.data = block.source.data.substring(0, maxLen);
               }
-              // Força sempre jpeg
               block.source.media_type = 'image/jpeg';
             }
           }
@@ -42,15 +38,14 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
+        max_tokens: 4000,  // Aumentado para leitura completa
         ...body,
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('Anthropic API error:', response.status, errText);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: `Anthropic API error: ${response.status}`,
         detail: errText
       }, { status: response.status });
@@ -60,8 +55,7 @@ export async function POST(request) {
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error('Route error:', error.message);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: error.message,
       detail: 'Erro interno na rota /api/claude'
     }, { status: 500 });

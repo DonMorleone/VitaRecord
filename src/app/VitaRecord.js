@@ -23,7 +23,7 @@ async function callAI(systemPrompt, userContent) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1500,
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role: "user", content: userContent }],
     }),
@@ -45,7 +45,7 @@ async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1500,
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role: "user", content: msgContent }],
     }),
@@ -67,7 +67,7 @@ async function callAIWithPDF(systemPrompt, pdfBase64) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1500,
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{ role: "user", content: msgContent }],
     }),
@@ -328,10 +328,53 @@ function ExamesScreen({ state, setState }) {
     try {
       const isImage = file.type.startsWith("image/");
       const isPDF = file.type === "application/pdf";
-      const system = `Você é um especialista em medicina laboratorial brasileiro. IMPORTANTE: Responda SOMENTE com JSON puro, sem texto antes ou depois, sem markdown, sem explicações. Apenas o objeto JSON.
+      const system = `Você é um médico especialista em medicina laboratorial e diagnóstica brasileiro com 30 anos de experiência. Sua missão é analisar exames médicos com MÁXIMA PRECISÃO e COMPLETUDE.
 
-Formato exato:
-{"tipo":"nome do exame","data":"DD/MM/AAAA","laboratorio":"lab","paciente":"nome","medico":"dr","resumo":"resumo simples","alertas":["item alto/baixo"],"normais":["item normal"],"resultados":[{"nome":"analito","valor":"val","unidade":"un","referencia":"ref","status":"normal"}],"recomendacao":"orientação","tags":["palavra"]}`;
+REGRAS ABSOLUTAS:
+1. Responda APENAS com JSON puro. Zero texto fora do JSON. Zero markdown. Zero explicações.
+2. NUNCA omita nenhum analito, parâmetro ou resultado presente no exame. TODOS devem estar no array "resultados".
+3. Se um valor estiver ilegível, inclua com valor "ilegível".
+4. Extraia TODOS os dados visíveis: datas, carimbos, assinaturas, números de ficha, CNES, CRM.
+5. Para cada analito, compare com os valores de referência DO PRÓPRIO EXAME.
+6. Status: "normal" = dentro da faixa, "alto" = acima, "baixo" = abaixo, "critico" = muito fora da faixa.
+
+FORMATO JSON OBRIGATÓRIO (preencha TODOS os campos):
+{
+  "tipo": "nome completo do exame",
+  "subtipo": "subtipo se houver (ex: sangue total, soro, urina tipo I)",
+  "data": "DD/MM/AAAA",
+  "hora": "HH:MM se visível",
+  "laboratorio": "nome completo do laboratório",
+  "unidade": "unidade/filial se informada",
+  "cnes": "código CNES se visível",
+  "paciente": "nome completo",
+  "dataNascimento": "DD/MM/AAAA se visível",
+  "idade": "idade se visível",
+  "sexo": "M ou F se visível",
+  "medico": "nome e CRM do médico solicitante",
+  "responsavel": "responsável técnico e CRM",
+  "ficha": "número da ficha/OS se visível",
+  "metodo": "método utilizado se informado",
+  "material": "material coletado se informado",
+  "resumo": "análise clínica completa em linguagem acessível para o paciente, mencionando TODOS os achados relevantes, sem abreviações",
+  "alertas": ["LISTA COMPLETA de todos os valores alterados com nome, valor encontrado e valor de referência"],
+  "normais": ["lista resumida dos principais valores normais"],
+  "resultados": [
+    {
+      "nome": "nome completo do analito sem abreviação",
+      "valor": "valor numérico ou texto exato",
+      "unidade": "unidade de medida",
+      "referencia": "faixa de referência completa como aparece no exame",
+      "status": "normal|alto|baixo|critico",
+      "observacao": "nota clínica se houver"
+    }
+  ],
+  "observacoesLaboratorio": "observações técnicas do laudo se houver",
+  "recomendacao": "orientação detalhada: o que o paciente deve fazer com estes resultados, quando repetir, quais especialistas consultar",
+  "tags": ["lista ampla de palavras-chave para busca: nomes dos analitos, condições relacionadas, especialidades médicas"]
+}
+
+ATENÇÃO: Um hemograma tem no mínimo 15 analitos. Um exame de urina tem no mínimo 10. Bioquímica pode ter 20+. LISTE TODOS.`;
       let texto;
       if (isImage) {
         const b64 = await toBase64Image(file);
