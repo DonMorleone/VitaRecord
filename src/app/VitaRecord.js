@@ -23,19 +23,21 @@ async function callAI(systemPrompt, userContent) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1000,
+      max_tokens: 1500,
       system: systemPrompt,
       messages: [{ role: "user", content: userContent }],
     }),
   });
   const d = await res.json();
   if (d.error) throw new Error(d.error + (d.detail ? ": " + d.detail : ""));
-  return d.content?.[0]?.text || "Não foi possível processar.";
+  const text = d.content?.find(b => b.type === "text")?.text;
+  if (!text) throw new Error("IA não retornou resposta. Tente novamente.");
+  return text;
 }
 
 async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
-  const content = [
-    { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+  const msgContent = [
+    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imageBase64 } },
     { type: "text", text },
   ];
   const res = await fetch("/api/claude", {
@@ -43,40 +45,65 @@ async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 1000,
+      max_tokens: 1500,
       system: systemPrompt,
-      messages: [{ role: "user", content }],
+      messages: [{ role: "user", content: msgContent }],
     }),
   });
   const d = await res.json();
   if (d.error) throw new Error(d.error + (d.detail ? ": " + d.detail : ""));
-  return d.content?.[0]?.text || "Não foi possível processar.";
+  const txt = d.content?.find(b => b.type === "text")?.text;
+  if (!txt) throw new Error("IA não retornou resposta para a imagem.");
+  return txt;
+}
+
+async function callAIWithPDF(systemPrompt, pdfBase64) {
+  const msgContent = [
+    { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+    { type: "text", text: "Analise este documento com máxima precisão e extraia todos os dados conforme solicitado." },
+  ];
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 1500,
+      system: systemPrompt,
+      messages: [{ role: "user", content: msgContent }],
+    }),
+  });
+  const d = await res.json();
+  if (d.error) throw new Error(d.error + (d.detail ? ": " + d.detail : ""));
+  const txt = d.content?.find(b => b.type === "text")?.text;
+  if (!txt) throw new Error("IA não retornou resposta para o PDF.");
+  return txt;
 }
 
 function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function toBase64Image(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const maxSize = 1200;
+        const maxSize = 1024;
         let { width, height } = img;
         if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
-          } else {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
-          }
+          if (width > height) { height = Math.round((height * maxSize) / width); width = maxSize; }
+          else { width = Math.round((width * maxSize) / height); height = maxSize; }
         }
         const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-        const compressed = canvas.toDataURL("image/jpeg", 0.8);
-        resolve(compressed.split(",")[1]);
+        canvas.width = width; canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.75).split(",")[1]);
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -288,10 +315,11 @@ function ExamesScreen({ state, setState }) {
 }`;
       let texto;
       if (isImage) {
-        const b64 = await toBase64(file);
+        const b64 = await toBase64Image(file);
         texto = await callAIWithImage(system, "Analise este exame médico com máxima precisão e extraia todos os dados.", b64, "image/jpeg");
       } else if (isPDF) {
-        texto = await callAI(system, `Este é um exame em PDF: ${file.name}. Como não consigo processar PDFs diretamente, crie um exemplo estruturado baseado no nome do arquivo indicando que o usuário deve usar a função de foto/imagem para melhores resultados. Retorne JSON com tipo baseado no nome do arquivo.`);
+        const b64 = await toBase64(file);
+        texto = await callAIWithPDF(system, b64);
       } else {
         texto = await callAI(system, `Arquivo: ${file.name}`);
       }
@@ -422,8 +450,11 @@ function ReceitasScreen({ state, setState }) {
 }`;
       let texto;
       if (isImage) {
-        const b64 = await toBase64(file);
+        const b64 = await toBase64Image(file);
         texto = await callAIWithImage(system, "Analise esta receita médica com máxima precisão.", b64, "image/jpeg");
+      } else if (file.type === "application/pdf") {
+        const b64 = await toBase64(file);
+        texto = await callAIWithPDF(system, b64);
       } else {
         texto = await callAI(system, `Receita: ${file.name}`);
       }
@@ -555,8 +586,11 @@ function PedidosScreen({ state, setState }) {
 }`;
       let texto;
       if (isImage) {
-        const b64 = await toBase64(file);
+        const b64 = await toBase64Image(file);
         texto = await callAIWithImage(system, "Analise este pedido de exame médico.", b64, "image/jpeg");
+      } else if (file.type === "application/pdf") {
+        const b64 = await toBase64(file);
+        texto = await callAIWithPDF(system, b64);
       } else {
         texto = await callAI(system, `Pedido: ${file.name}`);
       }
