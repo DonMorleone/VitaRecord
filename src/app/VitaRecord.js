@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────
 const C = {
@@ -947,9 +947,52 @@ const INITIAL_STATE = {
   vacinas: [],
 };
 
+const STORAGE_KEY = "vitarecord_data_v1";
+
+function loadState() {
+  if (typeof window === "undefined") return INITIAL_STATE;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...INITIAL_STATE, ...parsed };
+    }
+  } catch(e) { console.warn("Failed to load state:", e); }
+  return INITIAL_STATE;
+}
+
+function saveState(state) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch(e) { console.warn("Failed to save state:", e); }
+}
+
 export default function VitaRecord() {
   const [tela, setTela] = useState("home");
-  const [state, setState] = useState(INITIAL_STATE);
+  const [state, setStateRaw] = useState(INITIAL_STATE);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    setStateRaw(loadState());
+    setHydrated(true);
+  }, []);
+
+  // Save to localStorage on every change
+  function setState(updater) {
+    setStateRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveState(next);
+      return next;
+    });
+  }
+
+  if (!hydrated) return (
+    <div style={{ background: "#07090f", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#4fd1c5", fontFamily: "monospace", fontSize: 14 }}>◉ Carregando VitaRecord...</div>
+    </div>
+  );
 
   const TELAS = {
     home: { label: "Início", icon: "⌂" },
