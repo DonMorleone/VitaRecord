@@ -53,10 +53,34 @@ async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
 
 function toBase64(file) {
   return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result.split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSize = 1200;
+        let { width, height } = img;
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          } else {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.8);
+        resolve(compressed.split(",")[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
   });
 }
 
@@ -242,7 +266,7 @@ function ExamesScreen({ state, setState }) {
       let texto;
       if (isImage) {
         const b64 = await toBase64(file);
-        texto = await callAIWithImage(system, "Analise este exame médico com máxima precisão e extraia todos os dados.", b64, file.type);
+        texto = await callAIWithImage(system, "Analise este exame médico com máxima precisão e extraia todos os dados.", b64, "image/jpeg");
       } else if (isPDF) {
         texto = await callAI(system, `Este é um exame em PDF: ${file.name}. Como não consigo processar PDFs diretamente, crie um exemplo estruturado baseado no nome do arquivo indicando que o usuário deve usar a função de foto/imagem para melhores resultados. Retorne JSON com tipo baseado no nome do arquivo.`);
       } else {
@@ -377,7 +401,7 @@ function ReceitasScreen({ state, setState }) {
       let texto;
       if (isImage) {
         const b64 = await toBase64(file);
-        texto = await callAIWithImage(system, "Analise esta receita médica com máxima precisão.", b64, file.type);
+        texto = await callAIWithImage(system, "Analise esta receita médica com máxima precisão.", b64, "image/jpeg");
       } else {
         texto = await callAI(system, `Receita: ${file.name}`);
       }
@@ -511,7 +535,7 @@ function PedidosScreen({ state, setState }) {
       let texto;
       if (isImage) {
         const b64 = await toBase64(file);
-        texto = await callAIWithImage(system, "Analise este pedido de exame médico.", b64, file.type);
+        texto = await callAIWithImage(system, "Analise este pedido de exame médico.", b64, "image/jpeg");
       } else {
         texto = await callAI(system, `Pedido: ${file.name}`);
       }
@@ -646,7 +670,7 @@ function VacinasScreen({ state, setState }) {
   "observacoes": "observações gerais sobre o calendário vacinal"
 }`;
       const b64 = await toBase64(file);
-      const texto = await callAIWithImage(system, "Analise esta carteirinha de vacinação com máxima atenção.", b64, file.type);
+      const texto = await callAIWithImage(system, "Analise esta carteirinha de vacinação com máxima atenção.", b64, "image/jpeg");
       const parsed = JSON.parse(texto.replace(/```json|```/g, "").trim());
       if (parsed.vacinas) {
         setState(s => ({ ...s, vacinas: [...parsed.vacinas, ...s.vacinas] }));
