@@ -9,20 +9,24 @@ export async function POST(request) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'API key not configured',
+        detail: 'ANTHROPIC_API_KEY não configurada no Vercel'
+      }, { status: 500 });
     }
 
-    // Se tiver imagem, comprime o base64 limitando tamanho
+    // Comprime imagens grandes antes de enviar
     if (body.messages) {
       for (const msg of body.messages) {
         if (Array.isArray(msg.content)) {
           for (const block of msg.content) {
             if (block.type === 'image' && block.source?.data) {
-              // Limita base64 a ~1MB (imagens maiores causam erro de memória)
-              const maxBase64Length = 1400000;
-              if (block.source.data.length > maxBase64Length) {
-                block.source.data = block.source.data.substring(0, maxBase64Length);
+              const maxLen = 1200000;
+              if (block.source.data.length > maxLen) {
+                block.source.data = block.source.data.substring(0, maxLen);
               }
+              // Força sempre jpeg
+              block.source.media_type = 'image/jpeg';
             }
           }
         }
@@ -43,9 +47,23 @@ export async function POST(request) {
       }),
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Anthropic API error:', response.status, errText);
+      return NextResponse.json({ 
+        error: `Anthropic API error: ${response.status}`,
+        detail: errText
+      }, { status: response.status });
+    }
+
     const data = await response.json();
     return NextResponse.json(data);
+
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Route error:', error.message);
+    return NextResponse.json({ 
+      error: error.message,
+      detail: 'Erro interno na rota /api/claude'
+    }, { status: 500 });
   }
 }

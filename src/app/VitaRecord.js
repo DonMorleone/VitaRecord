@@ -29,6 +29,7 @@ async function callAI(systemPrompt, userContent) {
     }),
   });
   const d = await res.json();
+  if (d.error) throw new Error(d.error + (d.detail ? ": " + d.detail : ""));
   return d.content?.[0]?.text || "Não foi possível processar.";
 }
 
@@ -48,6 +49,7 @@ async function callAIWithImage(systemPrompt, text, imageBase64, mediaType) {
     }),
   });
   const d = await res.json();
+  if (d.error) throw new Error(d.error + (d.detail ? ": " + d.detail : ""));
   return d.content?.[0]?.text || "Não foi possível processar.";
 }
 
@@ -276,7 +278,7 @@ function ExamesScreen({ state, setState }) {
       const parsed = JSON.parse(clean);
       setResultado(parsed);
     } catch (e) {
-      setResultado({ erro: true, mensagem: "Erro na análise. Use uma foto nítida do exame." });
+      setResultado({ erro: true, mensagem: `Erro: ${e?.message || e}. Tente novamente.` });
     }
     setLoading(false);
   }
